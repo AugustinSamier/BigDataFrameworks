@@ -17,6 +17,9 @@ def dataEng(data):
     df = df.dropna()
     return df
 
+def calculSMA(df,time):
+    return df.groupby("ticker")["close"].transform(lambda x:x.rolling(window=time).mean())
+
 def sharpRatioLabel(ratio):
     if ratio<0:
         return "Bad"
@@ -86,8 +89,8 @@ def initData():
     df_min=dataEng(dfmin)
 
     df_day["return"]=df_day.groupby("ticker")["close"].pct_change()
-    df_day["SMA50"]=df_day.groupby("ticker")["close"].transform(lambda x:x.rolling(window=50).mean()) #SMA (Simple Moving Average) for 50 days
-    df_day["SMA200"]=df_day.groupby("ticker")["close"].transform(lambda x:x.rolling(window=200).mean()) #for 200 days
+    df_day["SMA50"]=calculSMA(df_day,50) #SMA (Simple Moving Average) for 50 days
+    df_day["SMA200"]=calculSMA(df_day,200) #for 200 days
 
     sharpReturnDf=pd.DataFrame()
     sharpReturnDf["ticker"]=valid_nasdaq_list
@@ -165,9 +168,65 @@ def plotCloseEvol(ticker,periode):
         filtered=df_day[(df_day["date"]>=start_date)&(df_day["ticker"]==ticker)]
     
     filtered=filtered.sort_values(by="date")
+
+    if not filtered.empty:
+        firstClose=filtered["close"].iloc[0]
+        lastClose=filtered["close"].iloc[-1]
+        var=((lastClose-firstClose)/firstClose)*100
+        sma50=sharpReturnDf[sharpReturnDf["ticker"]==ticker]["SMA50"].iloc[0]
+        sma200=sharpReturnDf[sharpReturnDf["ticker"]==ticker]["SMA200"].iloc[0]
+    else:
+        var=0
+
+    if var>0:
+        varClose=f"+{var:.2f}%"
+    else:
+        varClose=f"{var:.2f}%"
+
+    if(periode=="1 Day"):
+        filtered.loc[filtered["date"].diff()>timedelta(hours=12),"close"]=None
+        filtered["heure"]=filtered["date"].dt.strftime("%d %H:%M")
+        filtered=filtered.sort_values(by="date")
+        x_label=filtered["heure"]
+    elif(periode=="1 Week"):
+        filtered.loc[filtered["date"].diff()>timedelta(hours=12),"close"]=None
+        filtered=filtered.sort_values(by="date")
+        filtered["day"]=filtered["date"].dt.strftime("%d %H:%M")
+        x_label=filtered["day"]
+    else:
+        filtered=filtered.sort_values(by="date")
+        x_label=filtered["date"]
+
     fig =go.Figure()
-    fig.add_trace(go.Scatter(x=filtered["date"],y=filtered["close"],mode="lines",name=f"Close value ({ticker})"))
-    fig.update_layout(title=f"Close values for {ticker} ({periode})",xaxis_title="Date",yaxis_title="Close value (in $)",template="plotly_white")
+    fig.add_trace(go.Scatter(
+        x=x_label,
+        y=filtered["close"],
+        mode="lines",
+        name=f"Close value ({ticker})",
+        line=dict(color="blue",width=2),
+        connectgaps=False
+    ))
+    if(periode=="1 Day"):
+        titlex="Hour"
+        ntickss=24
+    elif((periode=="1 Week")):
+        titlex="Date"
+        ntickss=7
+    else:
+        titlex="Date"
+
+    if((periode=="1 Day")or(periode=="1 Week")):
+        xaxiss=dict(title=titlex,type="category",nticks=ntickss,showgrid=True)
+    else:
+        xaxiss=dict(title=titlex,showgrid=True)
+    
+
+    fig.update_layout(
+        title=f"Close values for {ticker} ({periode}) , {varClose}, SMA50 : {sma50:.2f}, SMA200: {sma200:.2f}",
+        xaxis=xaxiss,
+        yaxis_title="Close value (in $)",
+        template="plotly_white"
+    )
     st.plotly_chart(fig)
 
 def informationsTicker(tick):
@@ -246,8 +305,8 @@ df_min=dataEng(dfmin)
 st.write("Finally, we calculated the return rate per day (difference between close value from the last day and the actual day) and the moving average on 50 and 200 days. Moving average are the average of close values on the given time (here 50 and 200 days): ")
 st.code("""
 df_day["return"]=df_day.groupby("ticker")["close"].pct_change()
-df_day["SMA50"]=df_day.groupby("ticker")["close"].transform(lambda x:x.rolling(window=50).mean()) #SMA (Simple Moving Average) for 50 days
-df_day["SMA200"]=df_day.groupby("ticker")["close"].transform(lambda x:x.rolling(window=200).mean()) #for 200 days
+df_day["SMA50"]=calculSMA(df_day,50) #SMA (Simple Moving Average) for 50 days
+df_day["SMA200"]=calculSMA(df_day,200) #for 200 days
 """,language="python")
 st.write("Here is how looks like our dataframes :")
 st.write(df_day.head(5))
