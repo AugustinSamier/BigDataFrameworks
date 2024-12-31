@@ -234,6 +234,7 @@ def informationsTicker(tick):
     st.dataframe(infoTick)
 
 st.title("Investments advices page :")
+st.write("Created by Augustin SAMIER and Benjamin AUER, GR03")
 
 st.write("To give some advices about investments, we are using the yahoo_fin and the yfinance libraries: ")
 librairies="""
